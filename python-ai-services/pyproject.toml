@@ -1,0 +1,23 @@
+[project]
+name = "video-analyzer"
+version = "0.1.0"
+description = "AI-powered video analysis using Video-LLaMA"
+requires-python = ">=3.8"
+dependencies = [
+    "markupsafe==3.0.2",    # Add this line first
+    "torch>=2.7.1",
+    "torchvision",
+    "torchaudio",
+    "transformers>=4.46.3",
+    "opencv-python",
+    "pillow",
+    "python-dotenv",
+    "ollama",
+    "numpy",
+    "accelerate",
+    "bitsandbytes",
+]
+
+[tool.uv]
+index-strategy = "unsafe-best-match"
+extra-index-url = ["https://download.pytorch.org/whl/cu128"]

@@ -1,0 +1,14 @@
+{
+	"backtraceGraph" : 
+	{
+		"commands" : [],
+		"files" : [],
+		"nodes" : []
+	},
+	"installers" : [],
+	"paths" : 
+	{
+		"build" : "_deps/curl-build/docs/examples",
+		"source" : "/home/kaustubh/Documents/VAD-modular/build/_deps/curl-src/docs/examples"
+	}
+}

@@ -1,0 +1,8 @@
+/.vscode
+/reports
+/videos
+
+python-ai-services/.venv
+python-ai-services/.env
+python-ai-services/uv.lock
+

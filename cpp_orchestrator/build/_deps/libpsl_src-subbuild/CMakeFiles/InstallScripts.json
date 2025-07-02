@@ -1,0 +1,7 @@
+{
+	"InstallScripts" : 
+	[
+		"/home/kaustubh/Documents/VAD-modular/cpp_orchestrator/build/_deps/libpsl_src-subbuild/cmake_install.cmake"
+	],
+	"Parallel" : false
+}

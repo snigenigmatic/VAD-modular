@@ -1,0 +1,18 @@
+{
+	"InstallScripts" : 
+	[
+		"/home/kaustubh/Documents/VAD-modular/cpp_orchestrator/build/cmake_install.cmake",
+		"/home/kaustubh/Documents/VAD-modular/cpp_orchestrator/build/vendor/cpr/cmake_install.cmake",
+		"/home/kaustubh/Documents/VAD-modular/cpp_orchestrator/build/_deps/zlib-build/cmake_install.cmake",
+		"/home/kaustubh/Documents/VAD-modular/cpp_orchestrator/build/_deps/curl-build/cmake_install.cmake",
+		"/home/kaustubh/Documents/VAD-modular/cpp_orchestrator/build/_deps/curl-build/docs/cmake_install.cmake",
+		"/home/kaustubh/Documents/VAD-modular/cpp_orchestrator/build/_deps/curl-build/docs/libcurl/cmake_install.cmake",
+		"/home/kaustubh/Documents/VAD-modular/cpp_orchestrator/build/_deps/curl-build/docs/libcurl/opts/cmake_install.cmake",
+		"/home/kaustubh/Documents/VAD-modular/cpp_orchestrator/build/_deps/curl-build/scripts/cmake_install.cmake",
+		"/home/kaustubh/Documents/VAD-modular/cpp_orchestrator/build/_deps/curl-build/lib/cmake_install.cmake",
+		"/home/kaustubh/Documents/VAD-modular/cpp_orchestrator/build/_deps/curl-build/docs/examples/cmake_install.cmake",
+		"/home/kaustubh/Documents/VAD-modular/cpp_orchestrator/build/vendor/cpr/cpr/cmake_install.cmake",
+		"/home/kaustubh/Documents/VAD-modular/cpp_orchestrator/build/vendor/cpr/include/cmake_install.cmake"
+	],
+	"Parallel" : false
+}
