@@ -2,9 +2,17 @@ import os
 import torch
 import logging
 from dotenv import load_dotenv
-from fastapi import FastAPI, HTTPException
+import shutil
+import tempfile
+
+# The root cause of the bug is the Python environment. This import requires
+# that the 'ffmpeg-python' library is installed, NOT any other library named 'ffmpeg'.
+# FIX: Run `uv pip uninstall ffmpeg python-ffmpeg` and then `uv pip install ffmpeg-python`
+import ffmpeg
+
+from fastapi import FastAPI, HTTPException, File, Form, UploadFile
 from pydantic import BaseModel
-from transformers import AutoModelForCausalLM, AutoProcessor
+from transformers import AutoModelForCausalLM, AutoProcessor, LlavaNextForConditionalGeneration, LlavaNextProcessor
 import ollama
 
 # --- Configuration and Logging ---
@@ -13,10 +21,6 @@ logger = logging.getLogger(__name__)
 load_dotenv()
 
 # --- Pydantic Models for API type safety ---
-class ClipAnalysisRequest(BaseModel):
-    clip_path: str
-    prompt: str
-
 class RefinementRequest(BaseModel):
     videollama_caption: str
     timestamp: float
@@ -33,9 +37,12 @@ class AIModels:
         logger.info(f"Device in use: {self.device}")
         self.model = None
         self.processor = None
+        # Note: This is still calling load_videollama as per the original code.
         self.load_videollama()
 
     def load_videollama(self):
+        # This method is defined but not called by __init__ in the user's provided code.
+        # It's kept here as requested.
         model_id = "DAMO-NLP-SG/VideoLLaMA3-7B"
         cache_dir = os.getenv("HF_CACHE_DIR")
         logger.info(f"Loading Video-LLaMA 3 model: {model_id} from cache: {cache_dir}")
@@ -56,6 +63,27 @@ class AIModels:
             logger.critical(f"Failed to load Video-LLaMA 3 model: {e}", exc_info=True)
             raise
 
+    def load_llava(self):
+        model_id = "llava-hf/llava-v1.6-mistral-7b-hf"
+        cache_dir = os.getenv("HF_CACHE_DIR")
+        logger.info(f"Loading LLAVA model: {model_id} from cache: {cache_dir}")
+        try:
+            self.model = LlavaNextForConditionalGeneration.from_pretrained(
+                model_id,
+                trust_remote_code=True,
+                device_map="auto",
+                torch_dtype=torch.bfloat16,
+                attn_implementation="eager",
+                cache_dir=cache_dir,
+            )
+            self.processor = LlavaNextProcessor.from_pretrained(
+                model_id, trust_remote_code=True, cache_dir=cache_dir
+            )
+            logger.info("LLAVA model loaded successfully.")
+        except Exception as e:
+            logger.critical(f"Failed to load LLAVA model: {e}", exc_info=True)
+            raise
+
 # --- FastAPI Application ---
 app = FastAPI()
 
@@ -64,40 +92,56 @@ logger.info("Initializing AI Service...")
 ai_models = AIModels()
 logger.info("AI Service Initialized.")
 
+@app.get("/health")
+def health_check():
+    return {"status": "ok"}
+
+
 @app.post("/analyze_clip")
-def analyze_video_clip(request: ClipAnalysisRequest):
-    """Endpoint to generate a caption for a video clip."""
-    if not os.path.exists(request.clip_path):
-        raise HTTPException(status_code=404, detail=f"Video clip not found at: {request.clip_path}")
+def analyze_video_clip(prompt: str = Form(...), video_file: UploadFile = File(...)):
+    """Endpoint to generate a caption for a video clip from an uploaded file."""
+    with tempfile.NamedTemporaryFile(delete=True, suffix=".mp4") as temp_video:
+        shutil.copyfileobj(video_file.file, temp_video)
+        temp_video_path = temp_video.name
+        logger.info(f"Processing temporary video file: {temp_video_path}")
 
-    try:
-        conversation = [
-            {"role": "system", "content": "You are a helpful assistant analyzing video content."},
-            {
-                "role": "user",
-                "content": [
-                    {"type": "video", "video": {"video_path": request.clip_path, "fps": 1, "max_frames": 128}},
-                    {"type": "text", "text": request.prompt},
-                ],
-            },
-        ]
-        inputs = ai_models.processor(conversation=conversation, return_tensors="pt")
-        inputs = {k: v.to(ai_models.device) if isinstance(v, torch.Tensor) else v for k, v in inputs.items()}
-        if "pixel_values" in inputs:
-            inputs["pixel_values"] = inputs["pixel_values"].to(torch.bfloat16)
+        try:
+            conversation = [
+                {"role": "system", "content": "You are a helpful assistant analyzing video content."},
+                {
+                    "role": "user",
+                    "content": [
+                        {"type": "video", "video": {"video_path": temp_video_path, "fps": 1, "max_frames": 128}},
+                        {"type": "text", "text": prompt},
+                    ],
+                },
+            ]
+            inputs = ai_models.processor(conversation=conversation, return_tensors="pt")
+            inputs = {k: v.to(ai_models.device) if isinstance(v, torch.Tensor) else v for k, v in inputs.items()}
+            if "pixel_values" in inputs:
+                inputs["pixel_values"] = inputs["pixel_values"].to(torch.bfloat16)
 
-        with torch.no_grad():
-            output_ids = ai_models.model.generate(**inputs, max_new_tokens=200)
-        
-        response = ai_models.processor.batch_decode(output_ids, skip_special_tokens=True)[0].strip()
-        
-        if torch.cuda.is_available():
-            torch.cuda.empty_cache()
+            with torch.no_grad():
+                output_ids = ai_models.model.generate(**inputs, max_new_tokens=200)
             
-        return {"caption": response}
-    except Exception as e:
-        logger.error(f"Video-LLaMA processing error for {request.clip_path}: {e}", exc_info=True)
-        raise HTTPException(status_code=500, detail="Video-LLaMA processing failed.")
+            response = ai_models.processor.batch_decode(output_ids, skip_special_tokens=True)[0].strip()
+            
+            # BUG FIX: Explicitly delete tensors to free up GPU memory.
+            # This is the crucial step to prevent the out-of-memory error on subsequent requests.
+            del inputs
+            del output_ids
+            
+            if torch.cuda.is_available():
+                torch.cuda.empty_cache()
+                
+            return {"caption": response}
+        except Exception as e:
+            # Clean up VRAM even if an error occurs
+            if torch.cuda.is_available():
+                torch.cuda.empty_cache()
+            logger.error(f"Video-LLaMA processing error for uploaded file {video_file.filename}: {e}", exc_info=True)
+            raise HTTPException(status_code=500, detail="Video-LLaMA processing failed.")
+
 
 @app.post("/refine_analysis")
 def refine_analysis(request: RefinementRequest):
@@ -123,7 +167,7 @@ Example: {{"description": "A red car is speeding through an intersection.", "ano
         response = ollama.chat(
             model="llama3", 
             messages=[{"role": "user", "content": context_prompt}],
-            format="json" # Use Ollama's JSON mode for reliable output
+            format="json"
         )
         refined_output = response["message"]["content"]
         return {"refined_analysis": refined_output}
@@ -156,5 +200,4 @@ Provide a JSON object with keys "overall_summary", "key_events", "anomaly_summar
 
 if __name__ == "__main__":
     import uvicorn
-    # To run: uvicorn service:app --host 0.0.0.0 --port 8000
-    uvicorn.run(app, host="0.0.0.0", port=8000)
+    uvicorn.run("services:app", host="0.0.0.0", port=8000)
