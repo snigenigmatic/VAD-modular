@@ -2,14 +2,15 @@
 name = "video-analyzer"
 version = "0.1.0"
 description = "AI-powered video analysis using Video-LLaMA"
-requires-python = ">=3.8"
+requires-python = ">=3.9"
 dependencies = [
-    "markupsafe==3.0.2",    # Add this line first
+    "markupsafe==2.1.5",    # Add this line first
     "torch>=2.7.1",
     "torchvision",
     "torchaudio",
     "transformers>=4.46.3",
     "opencv-python",
+    "transformers==4.46.3",
     "pillow",
     "python-dotenv",
     "ollama",
